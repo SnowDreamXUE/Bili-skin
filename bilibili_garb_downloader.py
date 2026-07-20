@@ -74,18 +74,43 @@ def get_dlc_detail(act_id: int, lottery_id: int) -> Optional[dict]:
         return None
 
 
-def download_file(url: str, save_path: str) -> bool:
-    """下载文件"""
-    try:
-        resp = requests.get(url, headers=HEADERS, timeout=60, stream=True)
-        resp.raise_for_status()
-        with open(save_path, "wb") as f:
-            for chunk in resp.iter_content(chunk_size=8192):
-                f.write(chunk)
-        return True
-    except Exception as e:
-        print(f"下载失败 {url}: {e}")
-        return False
+def download_file(url: str, save_path: str, max_retries: int = 3, retry_delay: int = 2) -> bool:
+    """下载文件（支持失败重试）
+    
+    Args:
+        url: 下载链接
+        save_path: 保存路径
+        max_retries: 最大重试次数，默认 3 次
+        retry_delay: 初始重试延迟（秒），默认 2 秒，每次重试延迟翻倍
+    
+    Returns:
+        下载是否成功
+    """
+    for attempt in range(1, max_retries + 1):
+        try:
+            resp = requests.get(url, headers=HEADERS, timeout=60, stream=True)
+            resp.raise_for_status()
+            with open(save_path, "wb") as f:
+                for chunk in resp.iter_content(chunk_size=8192):
+                    f.write(chunk)
+            return True
+        except Exception as e:
+            if attempt < max_retries:
+                # 计算下次重试的延迟时间（指数退避）
+                delay = retry_delay * (2 ** (attempt - 1))
+                print(f"下载失败 {url} (尝试 {attempt}/{max_retries}): {e}")
+                print(f"  等待 {delay} 秒后重试...")
+                import time
+                time.sleep(delay)
+            else:
+                print(f"下载失败 {url} (已重试 {max_retries} 次): {e}")
+                # 如果文件下载不完整，删除临时文件
+                if os.path.exists(save_path):
+                    try:
+                        os.remove(save_path)
+                    except:
+                        pass
+                return False
 
 
 def sanitize_filename(name: str) -> str:
