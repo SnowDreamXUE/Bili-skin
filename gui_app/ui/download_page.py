@@ -430,6 +430,17 @@ class DownloadPage(QWidget):
         self.scroll_layout.setSpacing(6)
         self.scroll_layout.setAlignment(Qt.AlignTop)
 
+        self.empty_hint_label = QLabel("暂无下载任务，请前往「搜索结果」页面添加")
+        self.empty_hint_label.setStyleSheet("""
+            QLabel {
+                color: #909399;
+                font-size: 13px;
+                padding: 20px;
+            }
+        """)
+        self.empty_hint_label.setAlignment(Qt.AlignCenter)
+        self.scroll_layout.addWidget(self.empty_hint_label)
+
         scroll_area.setWidget(self.scroll_content)
         list_layout.addWidget(scroll_area)
 
@@ -517,6 +528,9 @@ class DownloadPage(QWidget):
         }
         self.download_queue.append(task_data)
 
+        if self.empty_hint_label.isVisible():
+            self.empty_hint_label.hide()
+
         widget = DownloadItemWidget(task_id, name, item_type)
         widget.download_clicked.connect(self.on_single_download)
         widget.pause_clicked.connect(self.on_pause_download)
@@ -547,6 +561,8 @@ class DownloadPage(QWidget):
         self.all_download_queue = []
         self.all_download_index = -1
 
+        self.empty_hint_label.show()
+
     def on_delete_task(self, task_id: int):
         if self.download_thread and self.download_thread.isRunning() and self.current_task_id == task_id:
             QMessageBox.warning(self, "提示", "该任务正在下载中，请先终止")
@@ -561,6 +577,9 @@ class DownloadPage(QWidget):
 
         if self.all_download_mode and task_id in self.all_download_queue:
             self.all_download_queue.remove(task_id)
+
+        if len(self.task_widgets) == 0:
+            self.empty_hint_label.show()
 
     def on_terminate_download(self, task_id: int):
         if self.download_thread and self.download_thread.isRunning() and self.current_task_id == task_id:

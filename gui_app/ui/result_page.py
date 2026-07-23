@@ -65,9 +65,6 @@ class ResultPage(QWidget):
         self.result_list = QListWidget()
         self.result_list.itemClicked.connect(self.on_select_item)
         self.result_list.setStyleSheet("""
-            QListWidget {
-                border: none;
-            }
             QScrollBar:vertical {
                 width: 6px;
                 background-color: transparent;
@@ -90,6 +87,7 @@ class ResultPage(QWidget):
             }
         """)
         result_layout.addWidget(self.result_list)
+        self._show_empty_result_hint()
 
         splitter_layout.addWidget(result_group, 1)
 
@@ -105,7 +103,12 @@ class ResultPage(QWidget):
         self.detail_text = QTextEdit()
         self.detail_text.setReadOnly(True)
         self.detail_text.setPlaceholderText("选择一个项目查看详情...")
-        self.detail_text.setStyleSheet("border: none; font-size: 13px;")
+        self.detail_text.setStyleSheet("""
+            QTextEdit {
+                font-size: 13px;
+                background-color: white;
+            }
+        """)
         detail_layout.addWidget(self.detail_text)
 
         self.resource_group = QGroupBox("下载资源类别")
@@ -147,6 +150,12 @@ class ResultPage(QWidget):
         self.resource_group.setEnabled(False)
         self._clear_resource_checkboxes()
         self.added_item_ids.clear()
+
+        if not results:
+            self._show_empty_result_hint()
+            self.count_label.setText("")
+            return
+
         self.count_label.setText(f"共 {len(results)} 条结果")
 
         for item in results:
@@ -157,6 +166,12 @@ class ResultPage(QWidget):
             list_item = QListWidgetItem(f"[{item_type}] {name}")
             list_item.setData(Qt.UserRole, item)
             self.result_list.addItem(list_item)
+
+    def _show_empty_result_hint(self):
+        hint_item = QListWidgetItem("暂无搜索结果，请前往「搜索」页面进行搜索")
+        hint_item.setForeground(Qt.GlobalColor.gray)
+        hint_item.setFlags(hint_item.flags() & ~Qt.ItemIsSelectable & ~Qt.ItemIsEnabled)
+        self.result_list.addItem(hint_item)
 
     def on_select_item(self, item: QListWidgetItem):
         data = item.data(Qt.UserRole)

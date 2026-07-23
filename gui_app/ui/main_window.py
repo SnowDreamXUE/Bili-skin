@@ -36,8 +36,6 @@ class BiliGarbGUI(QMainWindow):
         self.tab_widget.addTab(self.result_page, "搜索结果")
         self.tab_widget.addTab(self.download_page, "下载管理")
 
-        self.tab_widget.setTabEnabled(1, False)
-
         main_layout.addWidget(self.tab_widget)
 
     def _apply_style(self):
@@ -49,7 +47,6 @@ class BiliGarbGUI(QMainWindow):
             return
 
         self.result_page.set_results(results)
-        self.tab_widget.setTabEnabled(1, True)
         self.tab_widget.setCurrentIndex(1)
 
     def on_search_error(self, error_msg: str):
