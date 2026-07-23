@@ -445,14 +445,14 @@ class DownloadPage(QWidget):
                 border: 1px solid #EBEEF5;
                 border-radius: 6px;
                 margin-top: 0px;
-                padding-top: 20px;
+                padding-top: 30px;
                 background-color: white;
             }
             QGroupBox::title {
-                subcontrol-origin: margin;
+                subcontrol-origin: padding;
                 subcontrol-position: top left;
                 left: 10px;
-                top: -8px;
+                top: 6px;
                 padding-left: 6px;
                 padding-right: 6px;
                 padding-top: 0px;
@@ -461,7 +461,7 @@ class DownloadPage(QWidget):
                 font-size: 14px;
                 font-weight: 500;
                 color: #606266;
-                background-color: white;
+                background-color: transparent;
             }
         """)
         log_layout = QVBoxLayout(log_group)
