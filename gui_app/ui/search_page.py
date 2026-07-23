@@ -18,8 +18,8 @@ class SearchPage(QWidget):
 
     def _init_ui(self):
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(40, 60, 40, 40)
-        layout.setSpacing(20)
+        layout.setContentsMargins(40, 40, 40, 40)
+        layout.setSpacing(15)
 
         title_label = QLabel("Bilibili 装扮/收藏集下载器")
         title_label.setAlignment(Qt.AlignCenter)
@@ -30,8 +30,6 @@ class SearchPage(QWidget):
         subtitle_label.setAlignment(Qt.AlignCenter)
         subtitle_label.setStyleSheet("font-size: 14px; color: #909399;")
         layout.addWidget(subtitle_label)
-
-        layout.addStretch()
 
         search_layout = QHBoxLayout()
         search_layout.setSpacing(10)
@@ -55,6 +53,15 @@ class SearchPage(QWidget):
         tip_label.setAlignment(Qt.AlignCenter)
         tip_label.setStyleSheet("font-size: 12px; color: #c0c4cc;")
         layout.addWidget(tip_label)
+
+        notice_label = QLabel("""<span style="color:#F56C6C;">⚠️ 注意事项：</span><br/>
+<span style="color:#909399;">• 本工具仅供学习交流使用，请勿用于商业用途</span><br/>
+<span style="color:#909399;">• 下载的素材版权归 Bilibili 及原作者所有</span><br/>
+<span style="color:#909399;">• 请合理使用接口，避免频繁请求造成服务器压力</span>""")
+        notice_label.setAlignment(Qt.AlignCenter)
+        notice_label.setStyleSheet("font-size: 12px;")
+        notice_label.setWordWrap(True)
+        layout.addWidget(notice_label)
 
     def on_search(self):
         keyword = self.search_input.text().strip()
