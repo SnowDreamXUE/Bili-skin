@@ -1,3 +1,5 @@
+import time
+
 from PySide6.QtCore import QThread, Signal
 
 from gui_app.core.api_client import ApiClient
@@ -31,8 +33,19 @@ class DownloadThread(QThread):
         self.item = item
         self.save_dir = save_dir
         self.downloader = Downloader()
+        self._is_paused = False
+        self._is_stopped = False
+
+    def pause(self):
+        self._is_paused = True
+        self.downloader.pause()
+
+    def resume(self):
+        self._is_paused = False
+        self.downloader.resume()
 
     def stop(self):
+        self._is_stopped = True
         self.downloader.stop()
 
     def run(self):
@@ -50,7 +63,8 @@ class DownloadThread(QThread):
                 count = self.downloader.download_collectible(
                     name, int(act_id), int(lottery_id), self.save_dir,
                     progress_callback=lambda p, f: self.progress.emit(p, f),
-                    log_callback=lambda m: self.log.emit(m)
+                    log_callback=lambda m: self.log.emit(m),
+                    pause_check_callback=self._check_paused
                 )
             else:
                 item_id = self.item.get("item_id")
@@ -60,8 +74,13 @@ class DownloadThread(QThread):
                 count = self.downloader.download_suit(
                     name, int(item_id), self.save_dir,
                     progress_callback=lambda p, f: self.progress.emit(p, f),
-                    log_callback=lambda m: self.log.emit(m)
+                    log_callback=lambda m: self.log.emit(m),
+                    pause_check_callback=self._check_paused
                 )
             self.finished.emit(count)
         except Exception as e:
             self.error.emit(str(e))
+
+    def _check_paused(self):
+        while self._is_paused and not self._is_stopped:
+            time.sleep(0.1)

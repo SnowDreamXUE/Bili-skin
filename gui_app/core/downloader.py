@@ -1,6 +1,7 @@
 import os
 import re
-from typing import Optional, Dict
+import time
+from typing import Optional, Dict, Callable
 
 import requests
 
@@ -11,9 +12,20 @@ from gui_app.core.api_client import ApiClient
 class Downloader:
     def __init__(self):
         self._is_running = True
+        self._is_paused = False
+
+    def pause(self):
+        self._is_paused = True
+
+    def resume(self):
+        self._is_paused = False
 
     def stop(self):
         self._is_running = False
+
+    def _check_paused(self):
+        while self._is_paused and self._is_running:
+            time.sleep(0.1)
 
     def download_file(self, url: str, save_path: str) -> bool:
         if not self._is_running:
@@ -27,6 +39,7 @@ class Downloader:
                 for chunk in resp.iter_content(chunk_size=8192):
                     if not self._is_running:
                         return False
+                    self._check_paused()
                     f.write(chunk)
                     downloaded += len(chunk)
             return True
@@ -47,7 +60,9 @@ class Downloader:
             name = name[:200]
         return name
 
-    def download_collectible(self, name: str, act_id: int, lottery_id: int, base_dir: str, progress_callback=None, log_callback=None) -> int:
+    def download_collectible(self, name: str, act_id: int, lottery_id: int, base_dir: str, 
+                             progress_callback=None, log_callback=None, 
+                             pause_check_callback: Callable = None) -> int:
         if log_callback:
             log_callback(f"正在获取收藏集详情：{name}")
 
@@ -70,6 +85,8 @@ class Downloader:
         for i, item in enumerate(item_list):
             if not self._is_running:
                 break
+            if pause_check_callback:
+                pause_check_callback()
             card_info = item.get("card_info", {})
             if not card_info:
                 continue
@@ -104,7 +121,9 @@ class Downloader:
             log_callback(f"\n收藏集下载完成，共下载 {downloaded_count} 个文件")
         return downloaded_count
 
-    def download_suit(self, name: str, item_id: int, base_dir: str, progress_callback=None, log_callback=None) -> int:
+    def download_suit(self, name: str, item_id: int, base_dir: str,
+                      progress_callback=None, log_callback=None,
+                      pause_check_callback: Callable = None) -> int:
         if log_callback:
             log_callback(f"正在获取装扮详情：{name}")
 
@@ -156,6 +175,8 @@ class Downloader:
                 for item in items:
                     if not self._is_running:
                         break
+                    if pause_check_callback:
+                        pause_check_callback()
                     item_name = item.get("name", "")
                     match = re.match(r'\[.*?_(.*?)\]', item_name)
                     if match:
@@ -184,6 +205,8 @@ class Downloader:
             for bg_item in space_bg:
                 if not self._is_running:
                     break
+                if pause_check_callback:
+                    pause_check_callback()
                 props = bg_item.get("properties", {})
                 image_pairs = {}
                 for key, value in props.items():
@@ -200,6 +223,8 @@ class Downloader:
                 for num, orientations in sorted(image_pairs.items(), key=lambda x: int(x[0])):
                     if not self._is_running:
                         break
+                    if pause_check_callback:
+                        pause_check_callback()
                     base_name = f"{self.sanitize_filename(name)}_{num}"
 
                     if "landscape" in orientations:

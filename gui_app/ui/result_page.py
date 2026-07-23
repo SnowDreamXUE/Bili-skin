@@ -1,0 +1,130 @@
+from PySide6.QtWidgets import (
+    QWidget, QVBoxLayout, QHBoxLayout,
+    QListWidget, QListWidgetItem, QPushButton, QLabel, QTextEdit, QMessageBox
+)
+from PySide6.QtCore import Qt, Signal
+
+from gui_app.config.style import ELEMENTUI_STYLE
+
+
+class ResultPage(QWidget):
+    add_to_download = Signal(dict)
+
+    def __init__(self):
+        super().__init__()
+        self.search_results = []
+        self.selected_item = None
+        self._init_ui()
+
+    def _init_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(15)
+
+        header_layout = QHBoxLayout()
+        header_layout.setSpacing(10)
+
+        title_label = QLabel("搜索结果")
+        title_label.setStyleSheet("font-size: 16px; font-weight: 600; color: #303133;")
+        header_layout.addWidget(title_label)
+
+        self.count_label = QLabel("")
+        self.count_label.setStyleSheet("font-size: 13px; color: #909399;")
+        header_layout.addWidget(self.count_label)
+
+        header_layout.addStretch()
+
+        self.add_btn = QPushButton("添加到下载列表")
+        self.add_btn.clicked.connect(self.on_add_to_download)
+        self.add_btn.setEnabled(False)
+        header_layout.addWidget(self.add_btn)
+
+        layout.addLayout(header_layout)
+
+        splitter_layout = QHBoxLayout()
+        splitter_layout.setSpacing(15)
+
+        result_group = QWidget()
+        result_group.setStyleSheet("background-color: white; border-radius: 4px; border: 1px solid #ebeef5;")
+        result_layout = QVBoxLayout(result_group)
+        result_layout.setContentsMargins(0, 0, 0, 0)
+
+        result_header = QLabel("搜索结果列表")
+        result_header.setStyleSheet("padding: 10px 15px; font-weight: 500; color: #606266; border-bottom: 1px solid #f2f6fc;")
+        result_layout.addWidget(result_header)
+
+        self.result_list = QListWidget()
+        self.result_list.itemClicked.connect(self.on_select_item)
+        self.result_list.setStyleSheet("border: none;")
+        result_layout.addWidget(self.result_list)
+
+        splitter_layout.addWidget(result_group, 1)
+
+        detail_group = QWidget()
+        detail_group.setStyleSheet("background-color: white; border-radius: 4px; border: 1px solid #ebeef5;")
+        detail_layout = QVBoxLayout(detail_group)
+        detail_layout.setContentsMargins(0, 0, 0, 0)
+
+        detail_header = QLabel("详情信息")
+        detail_header.setStyleSheet("padding: 10px 15px; font-weight: 500; color: #606266; border-bottom: 1px solid #f2f6fc;")
+        detail_layout.addWidget(detail_header)
+
+        self.detail_text = QTextEdit()
+        self.detail_text.setReadOnly(True)
+        self.detail_text.setPlaceholderText("选择一个项目查看详情...")
+        self.detail_text.setStyleSheet("border: none; font-size: 13px;")
+        detail_layout.addWidget(self.detail_text)
+
+        splitter_layout.addWidget(detail_group, 1)
+
+        layout.addLayout(splitter_layout)
+
+    def set_results(self, results: list):
+        self.search_results = results
+        self.result_list.clear()
+        self.detail_text.clear()
+        self.selected_item = None
+        self.add_btn.setEnabled(False)
+        self.count_label.setText(f"共 {len(results)} 条结果")
+
+        for item in results:
+            name = item.get("name", "未知")
+            part_id = item.get("part_id", 0)
+            item_type = "收藏集" if part_id == 0 else "装扮"
+
+            list_item = QListWidgetItem(f"[{item_type}] {name}")
+            list_item.setData(Qt.UserRole, item)
+            self.result_list.addItem(list_item)
+
+    def on_select_item(self, item: QListWidgetItem):
+        data = item.data(Qt.UserRole)
+        if not data:
+            return
+
+        self.selected_item = data
+        self.add_btn.setEnabled(True)
+
+        name = data.get("name", "未知")
+        part_id = data.get("part_id", 0)
+        item_type = "收藏集" if part_id == 0 else "装扮"
+        properties = data.get("properties", {})
+        cover = properties.get("image_cover", "")
+        item_id = data.get("item_id", "")
+
+        info_text = f"名称：{name}\n"
+        info_text += f"类型：{item_type}\n"
+        if item_type == "收藏集":
+            info_text += f"act_id：{properties.get('dlc_act_id', '未知')}\n"
+            info_text += f"lottery_id：{properties.get('dlc_lottery_id', '未知')}\n"
+        else:
+            info_text += f"item_id：{item_id}\n"
+        info_text += f"封面：{cover[:80]}{'...' if len(cover) > 80 else ''}"
+
+        self.detail_text.setText(info_text)
+
+    def on_add_to_download(self):
+        if self.selected_item:
+            self.add_to_download.emit(self.selected_item)
+            QMessageBox.information(self, "提示", "已添加到下载列表")
+            self.add_btn.setEnabled(False)
+            self.selected_item = None
