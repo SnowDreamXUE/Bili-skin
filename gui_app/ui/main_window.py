@@ -1,4 +1,8 @@
+import os
+import sys
+
 from PySide6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QTabWidget, QMessageBox
+from PySide6.QtGui import QIcon
 
 from gui_app.config.style import ELEMENTUI_STYLE
 from gui_app.ui.search_page import SearchPage
@@ -11,6 +15,7 @@ class BiliGarbGUI(QMainWindow):
         super().__init__()
         self.setWindowTitle("Bilibili 装扮/收藏集下载器")
         self.setMinimumSize(900, 650)
+        self._set_window_icon()
 
         self._init_ui()
         self._apply_style()
@@ -40,6 +45,15 @@ class BiliGarbGUI(QMainWindow):
 
     def _apply_style(self):
         self.setStyleSheet(ELEMENTUI_STYLE)
+
+    def _set_window_icon(self):
+        if getattr(sys, 'frozen', False):
+            base_path = sys._MEIPASS
+        else:
+            base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        icon_path = os.path.join(base_path, "icon.ico")
+        if os.path.exists(icon_path):
+            self.setWindowIcon(QIcon(icon_path))
 
     def on_search_finished(self, results: list):
         if not results:
