@@ -1,9 +1,11 @@
 import os
+from typing import List, Dict
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
     QListWidget, QListWidgetItem, QPushButton, QLabel,
-    QProgressBar, QTextEdit, QFileDialog, QMessageBox
+    QProgressBar, QTextEdit, QFileDialog, QMessageBox,
+    QRadioButton, QGroupBox
 )
 from PySide6.QtCore import Qt, Signal
 
@@ -13,11 +15,12 @@ from gui_app.ui.threads import DownloadThread
 class DownloadPage(QWidget):
     def __init__(self):
         super().__init__()
-        self.download_queue = []
+        self.download_queue: List[Dict] = []
         self.download_thread = None
         self.current_task_index = -1
         self.save_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         self.is_paused = False
+        self.download_mode = "all"
         self._init_ui()
 
     def _init_ui(self):
@@ -38,6 +41,25 @@ class DownloadPage(QWidget):
 
         layout.addLayout(path_layout)
 
+        filter_group = QGroupBox("下载选项")
+        filter_layout = QVBoxLayout(filter_group)
+        filter_layout.setSpacing(12)
+
+        mode_layout = QHBoxLayout()
+        mode_layout.setSpacing(20)
+
+        self.all_mode_radio = QRadioButton("全部下载")
+        self.all_mode_radio.setChecked(True)
+        self.all_mode_radio.toggled.connect(self.on_download_mode_changed)
+        mode_layout.addWidget(self.all_mode_radio)
+
+        self.selected_mode_radio = QRadioButton("当前选择下载")
+        self.selected_mode_radio.toggled.connect(self.on_download_mode_changed)
+        mode_layout.addWidget(self.selected_mode_radio)
+
+        filter_layout.addLayout(mode_layout)
+        layout.addWidget(filter_group)
+
         queue_group = QWidget()
         queue_group.setStyleSheet("background-color: white; border-radius: 4px; border: 1px solid #ebeef5;")
         queue_layout = QVBoxLayout(queue_group)
@@ -53,10 +75,21 @@ class DownloadPage(QWidget):
         self.clear_btn.clicked.connect(self.on_clear_queue)
         queue_header_layout.addWidget(self.clear_btn)
 
+        self.select_all_btn = QPushButton("全选")
+        self.select_all_btn.setStyleSheet("font-size: 12px; padding: 4px 12px;")
+        self.select_all_btn.clicked.connect(self.on_select_all)
+        queue_header_layout.addWidget(self.select_all_btn)
+
+        self.deselect_all_btn = QPushButton("取消全选")
+        self.deselect_all_btn.setStyleSheet("font-size: 12px; padding: 4px 12px;")
+        self.deselect_all_btn.clicked.connect(self.on_deselect_all)
+        queue_header_layout.addWidget(self.deselect_all_btn)
+
         queue_layout.addLayout(queue_header_layout)
 
         self.queue_list = QListWidget()
         self.queue_list.setStyleSheet("border: none;")
+        self.queue_list.setSelectionMode(QListWidget.ExtendedSelection)
         queue_layout.addWidget(self.queue_list)
 
         layout.addWidget(queue_group, 1)
@@ -119,21 +152,44 @@ class DownloadPage(QWidget):
 
         layout.addLayout(btn_layout)
 
-    def add_task(self, item: dict):
+    def add_task(self, item: dict, resource_types: list):
         name = item.get("name", "未知")
         part_id = item.get("part_id", 0)
         item_type = "收藏集" if part_id == 0 else "装扮"
 
         list_item = QListWidgetItem(f"[等待] [{item_type}] {name}")
-        list_item.setData(Qt.UserRole, item)
+        task_data = {
+            "item": item,
+            "resource_types": resource_types
+        }
+        list_item.setData(Qt.UserRole, task_data)
+        list_item.setFlags(list_item.flags() | Qt.ItemIsUserCheckable)
+        list_item.setCheckState(Qt.Unchecked)
         self.queue_list.addItem(list_item)
-        self.download_queue.append(item)
+        self.download_queue.append(task_data)
 
     def on_select_save_dir(self):
         dir_path = QFileDialog.getExistingDirectory(self, "选择保存目录", self.save_dir)
         if dir_path:
             self.save_dir = dir_path
             self.save_dir_label.setText(f"保存目录：{self.save_dir}")
+
+    def on_download_mode_changed(self):
+        if self.all_mode_radio.isChecked():
+            self.download_mode = "all"
+        else:
+            self.download_mode = "selected"
+
+    def on_select_all(self):
+        for i in range(self.queue_list.count()):
+            item = self.queue_list.item(i)
+            if item.text().startswith("[等待]"):
+                item.setCheckState(Qt.Checked)
+
+    def on_deselect_all(self):
+        for i in range(self.queue_list.count()):
+            item = self.queue_list.item(i)
+            item.setCheckState(Qt.Unchecked)
 
     def on_clear_queue(self):
         if self.download_thread and self.download_thread.isRunning():
@@ -144,34 +200,53 @@ class DownloadPage(QWidget):
         self.current_task_index = -1
 
     def on_start_download(self):
-        if not self.download_queue:
-            QMessageBox.warning(self, "提示", "下载队列为空，请先添加下载任务")
-            return
-
-        if self.current_task_index < 0:
-            self.current_task_index = 0
-        else:
+        if self.download_thread and self.download_thread.isRunning():
             if self.is_paused:
                 self.is_paused = False
-                self.log_text.append("继续下载...")
+                self.download_thread.resume()
                 self.pause_btn.setText("暂停下载")
+                self.log_text.append("继续下载...")
                 return
-
-        self._start_next_task()
-
-    def _start_next_task(self):
-        if self.current_task_index >= len(self.download_queue):
-            self.log_text.append("所有任务下载完成！")
-            self._reset_ui()
             return
 
+        download_indices = []
+        if self.download_mode == "all":
+            for i in range(len(self.download_queue)):
+                item = self.queue_list.item(i)
+                if item.text().startswith("[等待]"):
+                    download_indices.append(i)
+        else:
+            for i in range(len(self.download_queue)):
+                item = self.queue_list.item(i)
+                if item.checkState() == Qt.Checked and item.text().startswith("[等待]"):
+                    download_indices.append(i)
+
+        if not download_indices:
+            QMessageBox.warning(self, "提示", "没有可下载的任务")
+            return
+
+        self.download_indices = download_indices
+        self.current_task_index = 0
         self.start_btn.setEnabled(False)
         self.pause_btn.setEnabled(True)
         self.cancel_btn.setEnabled(True)
         self.select_path_btn.setEnabled(False)
         self.clear_btn.setEnabled(False)
+        self.all_mode_radio.setEnabled(False)
+        self.selected_mode_radio.setEnabled(False)
 
-        current_item = self.download_queue[self.current_task_index]
+        self._start_next_task()
+
+    def _start_next_task(self):
+        if self.current_task_index >= len(self.download_indices):
+            self.log_text.append("所有任务下载完成！")
+            self._reset_ui()
+            return
+
+        queue_index = self.download_indices[self.current_task_index]
+        current_task = self.download_queue[queue_index]
+        current_item = current_task["item"]
+        resource_types = current_task["resource_types"]
         name = current_item.get("name", "未知")
         part_id = current_item.get("part_id", 0)
         item_type = "收藏集" if part_id == 0 else "装扮"
@@ -181,21 +256,27 @@ class DownloadPage(QWidget):
 
         for i in range(self.queue_list.count()):
             item = self.queue_list.item(i)
-            if i == self.current_task_index:
+            if i == queue_index:
                 item.setText(f"[下载中] [{item_type}] {name}")
-            else:
-                data = item.data(Qt.UserRole)
-                item_name = data.get("name", "未知")
-                item_part_id = data.get("part_id", 0)
+            elif i in self.download_indices[self.current_task_index + 1:]:
+                task_data = item.data(Qt.UserRole)
+                item_name = task_data["item"].get("name", "未知")
+                item_part_id = task_data["item"].get("part_id", 0)
                 it_type = "收藏集" if item_part_id == 0 else "装扮"
                 item.setText(f"[等待] [{it_type}] {item_name}")
 
-        self.download_thread = DownloadThread(current_item, self.save_dir)
+        self.download_thread = DownloadThread(current_item, self.save_dir, resource_types)
         self.download_thread.progress.connect(self.on_download_progress)
         self.download_thread.finished.connect(self.on_download_finished)
         self.download_thread.error.connect(self.on_download_error)
         self.download_thread.log.connect(self.on_download_log)
+        self.download_thread.finished.connect(self._on_task_finished)
+        self.download_thread.error.connect(self._on_task_finished)
         self.download_thread.start()
+
+    def _on_task_finished(self):
+        self.current_task_index += 1
+        self._start_next_task()
 
     def on_pause_download(self):
         if self.download_thread and self.download_thread.isRunning():
@@ -223,28 +304,26 @@ class DownloadPage(QWidget):
         self.log_text.append(log_msg)
 
     def on_download_finished(self, count: int):
-        current_item = self.download_queue[self.current_task_index]
+        queue_index = self.download_indices[self.current_task_index]
+        current_task = self.download_queue[queue_index]
+        current_item = current_task["item"]
         name = current_item.get("name", "未知")
         part_id = current_item.get("part_id", 0)
         item_type = "收藏集" if part_id == 0 else "装扮"
 
-        self.queue_list.item(self.current_task_index).setText(f"[已完成] [{item_type}] {name}")
+        self.queue_list.item(queue_index).setText(f"[已完成] [{item_type}] {name}")
         self.log_text.append(f"✓ [{item_type}] {name} 下载完成，共 {count} 个文件")
 
-        self.current_task_index += 1
-        self._start_next_task()
-
     def on_download_error(self, error_msg: str):
-        current_item = self.download_queue[self.current_task_index]
+        queue_index = self.download_indices[self.current_task_index]
+        current_task = self.download_queue[queue_index]
+        current_item = current_task["item"]
         name = current_item.get("name", "未知")
         part_id = current_item.get("part_id", 0)
         item_type = "收藏集" if part_id == 0 else "装扮"
 
-        self.queue_list.item(self.current_task_index).setText(f"[失败] [{item_type}] {name}")
+        self.queue_list.item(queue_index).setText(f"[失败] [{item_type}] {name}")
         self.log_text.append(f"✗ [{item_type}] {name} 下载失败：{error_msg}")
-
-        self.current_task_index += 1
-        self._start_next_task()
 
     def _reset_ui(self):
         self.start_btn.setEnabled(True)
@@ -252,6 +331,9 @@ class DownloadPage(QWidget):
         self.cancel_btn.setEnabled(False)
         self.select_path_btn.setEnabled(True)
         self.clear_btn.setEnabled(True)
+        self.all_mode_radio.setEnabled(True)
+        self.selected_mode_radio.setEnabled(True)
+
         self.progress_bar.setValue(0)
         self.progress_label.setText("等待下载...")
         self.is_paused = False

@@ -1,19 +1,22 @@
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout,
-    QListWidget, QListWidgetItem, QPushButton, QLabel, QTextEdit, QMessageBox
+    QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
+    QListWidget, QListWidgetItem, QPushButton, QLabel, QTextEdit, QMessageBox,
+    QCheckBox, QGroupBox
 )
 from PySide6.QtCore import Qt, Signal
 
 from gui_app.config.style import ELEMENTUI_STYLE
+from gui_app.core.downloader import Downloader
 
 
 class ResultPage(QWidget):
-    add_to_download = Signal(dict)
+    add_to_download = Signal(dict, list)
 
     def __init__(self):
         super().__init__()
         self.search_results = []
         self.selected_item = None
+        self.resource_checkboxes = {}
         self._init_ui()
 
     def _init_ui(self):
@@ -75,9 +78,34 @@ class ResultPage(QWidget):
         self.detail_text.setStyleSheet("border: none; font-size: 13px;")
         detail_layout.addWidget(self.detail_text)
 
+        self.resource_group = QGroupBox("下载资源类别")
+        self.resource_group.setEnabled(False)
+        self.resource_layout = QGridLayout(self.resource_group)
+        self.resource_layout.setSpacing(8)
+        detail_layout.addWidget(self.resource_group)
+
         splitter_layout.addWidget(detail_group, 1)
 
         layout.addLayout(splitter_layout)
+
+    def _clear_resource_checkboxes(self):
+        for checkbox in self.resource_checkboxes.values():
+            checkbox.setParent(None)
+        self.resource_checkboxes.clear()
+
+    def _setup_resource_checkboxes(self, resource_types: dict, defaults: list = None):
+        self._clear_resource_checkboxes()
+        row, col = 0, 0
+        for key, label in resource_types.items():
+            checkbox = QCheckBox(label)
+            checkbox.setChecked(key in (defaults or []))
+            checkbox.setProperty("resource_key", key)
+            self.resource_checkboxes[key] = checkbox
+            self.resource_layout.addWidget(checkbox, row, col)
+            col += 1
+            if col >= 3:
+                col = 0
+                row += 1
 
     def set_results(self, results: list):
         self.search_results = results
@@ -85,6 +113,8 @@ class ResultPage(QWidget):
         self.detail_text.clear()
         self.selected_item = None
         self.add_btn.setEnabled(False)
+        self.resource_group.setEnabled(False)
+        self._clear_resource_checkboxes()
         self.count_label.setText(f"共 {len(results)} 条结果")
 
         for item in results:
@@ -116,15 +146,36 @@ class ResultPage(QWidget):
         if item_type == "收藏集":
             info_text += f"act_id：{properties.get('dlc_act_id', '未知')}\n"
             info_text += f"lottery_id：{properties.get('dlc_lottery_id', '未知')}\n"
+            self._setup_resource_checkboxes(
+                Downloader.COLLECTIBLE_RESOURCE_TYPES,
+                defaults=["card_img", "video_list"]
+            )
         else:
             info_text += f"item_id：{item_id}\n"
+            self._setup_resource_checkboxes(
+                Downloader.SUIT_RESOURCE_TYPES,
+                defaults=["emoji_package", "space_bg"]
+            )
         info_text += f"封面：{cover[:80]}{'...' if len(cover) > 80 else ''}"
 
         self.detail_text.setText(info_text)
+        self.resource_group.setEnabled(True)
+
+    def get_selected_resource_types(self) -> list:
+        types = []
+        for key, checkbox in self.resource_checkboxes.items():
+            if checkbox.isChecked():
+                types.append(key)
+        return types
 
     def on_add_to_download(self):
         if self.selected_item:
-            self.add_to_download.emit(self.selected_item)
+            resource_types = self.get_selected_resource_types()
+            if not resource_types:
+                QMessageBox.warning(self, "提示", "请至少选择一个资源类别")
+                return
+            self.add_to_download.emit(self.selected_item, resource_types)
             QMessageBox.information(self, "提示", "已添加到下载列表")
             self.add_btn.setEnabled(False)
             self.selected_item = None
+            self.resource_group.setEnabled(False)

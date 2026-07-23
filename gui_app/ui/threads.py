@@ -1,4 +1,5 @@
 import time
+from typing import List
 
 from PySide6.QtCore import QThread, Signal
 
@@ -28,10 +29,11 @@ class DownloadThread(QThread):
     error = Signal(str)
     log = Signal(str)
 
-    def __init__(self, item: dict, save_dir: str):
+    def __init__(self, item: dict, save_dir: str, resource_types: List[str] = None):
         super().__init__()
         self.item = item
         self.save_dir = save_dir
+        self.resource_types = resource_types
         self.downloader = Downloader()
         self._is_paused = False
         self._is_stopped = False
@@ -64,7 +66,8 @@ class DownloadThread(QThread):
                     name, int(act_id), int(lottery_id), self.save_dir,
                     progress_callback=lambda p, f: self.progress.emit(p, f),
                     log_callback=lambda m: self.log.emit(m),
-                    pause_check_callback=self._check_paused
+                    pause_check_callback=self._check_paused,
+                    resource_types=self.resource_types
                 )
             else:
                 item_id = self.item.get("item_id")
@@ -75,7 +78,8 @@ class DownloadThread(QThread):
                     name, int(item_id), self.save_dir,
                     progress_callback=lambda p, f: self.progress.emit(p, f),
                     log_callback=lambda m: self.log.emit(m),
-                    pause_check_callback=self._check_paused
+                    pause_check_callback=self._check_paused,
+                    resource_types=self.resource_types
                 )
             self.finished.emit(count)
         except Exception as e:
