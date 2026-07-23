@@ -1,4 +1,5 @@
 import os
+import sys
 from typing import List, Dict
 
 from PySide6.QtWidgets import (
@@ -308,7 +309,10 @@ class DownloadPage(QWidget):
         self.download_queue: List[Dict] = []
         self.download_thread = None
         self.current_task_id = -1
-        self.save_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        if getattr(sys, 'frozen', False):
+            self.save_dir = os.path.dirname(sys.executable)
+        else:
+            self.save_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         self.task_widgets: Dict[int, DownloadItemWidget] = {}
         self.next_task_id = 0
         self.all_download_mode = False
