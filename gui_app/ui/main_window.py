@@ -57,4 +57,3 @@ class BiliGarbGUI(QMainWindow):
 
     def on_add_to_download(self, item: dict, resource_types: list):
         self.download_page.add_task(item, resource_types)
-        self.tab_widget.setCurrentIndex(2)

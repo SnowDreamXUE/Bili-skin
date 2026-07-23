@@ -17,6 +17,7 @@ class ResultPage(QWidget):
         self.search_results = []
         self.selected_item = None
         self.resource_checkboxes = {}
+        self.added_item_ids = set()
         self._init_ui()
 
     def _init_ui(self):
@@ -36,6 +37,11 @@ class ResultPage(QWidget):
         header_layout.addWidget(self.count_label)
 
         header_layout.addStretch()
+
+        self.add_all_btn = QPushButton("一键添加所有")
+        self.add_all_btn.clicked.connect(self.on_add_all_to_download)
+        self.add_all_btn.setEnabled(False)
+        header_layout.addWidget(self.add_all_btn)
 
         self.add_btn = QPushButton("添加到下载列表")
         self.add_btn.clicked.connect(self.on_add_to_download)
@@ -58,7 +64,31 @@ class ResultPage(QWidget):
 
         self.result_list = QListWidget()
         self.result_list.itemClicked.connect(self.on_select_item)
-        self.result_list.setStyleSheet("border: none;")
+        self.result_list.setStyleSheet("""
+            QListWidget {
+                border: none;
+            }
+            QScrollBar:vertical {
+                width: 6px;
+                background-color: transparent;
+                margin: 0px;
+                padding: 0px;
+            }
+            QScrollBar::handle:vertical {
+                background-color: #D9D9D9;
+                border-radius: 3px;
+                min-height: 20px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background-color: #C0C4CC;
+            }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                height: 0px;
+            }
+            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+                background-color: transparent;
+            }
+        """)
         result_layout.addWidget(self.result_list)
 
         splitter_layout.addWidget(result_group, 1)
@@ -113,8 +143,10 @@ class ResultPage(QWidget):
         self.detail_text.clear()
         self.selected_item = None
         self.add_btn.setEnabled(False)
+        self.add_all_btn.setEnabled(len(results) > 0)
         self.resource_group.setEnabled(False)
         self._clear_resource_checkboxes()
+        self.added_item_ids.clear()
         self.count_label.setText(f"共 {len(results)} 条结果")
 
         for item in results:
@@ -168,14 +200,51 @@ class ResultPage(QWidget):
                 types.append(key)
         return types
 
+    def _get_unique_id(self, item: dict) -> str:
+        part_id = item.get("part_id", 0)
+        if part_id == 0:
+            properties = item.get("properties", {})
+            act_id = properties.get("dlc_act_id", "")
+            lottery_id = properties.get("dlc_lottery_id", "")
+            return f"collect_{act_id}_{lottery_id}"
+        else:
+            return f"suit_{item.get('item_id', '')}"
+
     def on_add_to_download(self):
         if self.selected_item:
             resource_types = self.get_selected_resource_types()
             if not resource_types:
                 QMessageBox.warning(self, "提示", "请至少选择一个资源类别")
                 return
+            unique_id = self._get_unique_id(self.selected_item)
+            if unique_id:
+                self.added_item_ids.add(unique_id)
             self.add_to_download.emit(self.selected_item, resource_types)
-            QMessageBox.information(self, "提示", "已添加到下载列表")
             self.add_btn.setEnabled(False)
             self.selected_item = None
             self.resource_group.setEnabled(False)
+
+    def on_add_all_to_download(self):
+        if not self.search_results:
+            return
+
+        added_count = 0
+        for item in self.search_results:
+            unique_id = self._get_unique_id(item)
+            if unique_id and unique_id in self.added_item_ids:
+                continue
+
+            part_id = item.get("part_id", 0)
+            if part_id == 0:
+                resource_types = ["card_img", "video_list"]
+            else:
+                resource_types = ["emoji_package", "space_bg"]
+
+            self.add_to_download.emit(item, resource_types)
+            if unique_id:
+                self.added_item_ids.add(unique_id)
+            added_count += 1
+
+        if added_count == 0:
+            QMessageBox.information(self, "提示", "所有任务已添加")
+        self.add_all_btn.setEnabled(False)
